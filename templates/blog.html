@@ -10,6 +10,8 @@
 <p>{{ post.body }}</p>
 <!-- TODO add author w/ link to author's blog page -->
 
+	Written By <a href="/blog/{{post.author.username}}">{{post.author.username}}</a>
+
 {% endfor %}
 
 {% if username %}

@@ -2,6 +2,7 @@ import webapp2, jinja2, os, re
 from google.appengine.ext import db
 from models import Post, User
 import hashutils
+#import logging
 
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir), autoescape = True)
@@ -11,7 +12,7 @@ class BlogHandler(webapp2.RequestHandler):
 
     def get_posts(self, limit, offset):
         """ Get all posts ordered by creation date (descending) """
-        query = Post.all().order('-created')
+        query = Post.all().order('created')
         return query.fetch(limit=limit, offset=offset)
 
     def get_posts_by_user(self, user, limit, offset):
@@ -19,16 +20,23 @@ class BlogHandler(webapp2.RequestHandler):
             Get all posts by a specific user, ordered by creation date (descending).
             The user parameter will be a User object.
         """
-
         # TODO - filter the query so that only posts by the given user
-        return None
+        query = Post.all().filter('author', user)
+        #return None
+        return query.fetch(limit=limit, offset=offset)
 
     def get_user_by_name(self, username):
         """ Get a user object from the db, based on their username """
         user = db.GqlQuery("SELECT * FROM User WHERE username = '%s'" % username)
         if user:
             return user.get()
-
+        
+    #def get_password_by_name(self, password):
+    #    """ Get a password object form the db, based on their password """
+    #    password = db.GqlQuery("SELECT * FROM User WHERE pw_hash = '%s'" % pw_hash)   
+    #    if password:
+    #        return password.get()
+             
     def login_user(self, user):
         """ Login a user specified by a User object user """
         user_id = user.key().id()
@@ -38,11 +46,13 @@ class BlogHandler(webapp2.RequestHandler):
         """ Logout a user specified by a User object user """
         self.set_secure_cookie('user_id', '')
 
+#gets the cookies out of the request and checks to see if the hashes are what they should be
     def read_secure_cookie(self, name):
         cookie_val = self.request.cookies.get(name)
         if cookie_val:
             return hashutils.check_secure_val(cookie_val)
 
+#takes the name, value of the cookie you want to set. Does all of the work in the response headers. 
     def set_secure_cookie(self, name, val):
         cookie_val = hashutils.make_secure_val(val)
         self.response.headers.add_header('Set-Cookie', '%s=%s; Path=/' % (name, cookie_val))
@@ -89,6 +99,7 @@ class BlogIndexHandler(BlogHandler):
         # Fetch posts for all users, or a specific user, depending on request parameters
         if username:
             user = self.get_user_by_name(username)
+            #logging.info(user)
             posts = self.get_posts_by_user(user, self.page_size, offset)
         else:
             posts = self.get_posts(self.page_size, offset)
@@ -144,7 +155,7 @@ class NewPostHandler(BlogHandler):
             id = post.key().id()
             self.redirect("/blog/%s" % id)
         else:
-            error = "we need both a title and a body!"
+            error = "we need both a title and a post!"
             self.render_form(title, body, error)
 
 class ViewPostHandler(BlogHandler):
@@ -275,14 +286,24 @@ class LoginHandler(BlogHandler):
 
         # get the user from the database
         user = self.get_user_by_name(submitted_username)
+        # get the password from the database
+        #password = self.get_password_by_name(submitted_password)
 
-        if not user:
-            self.render_login_form(error="Invalid username")
+        #if not user:
+            #self.render_login_form(error="Invalid username")
+            
+        if not submitted_username or not submitted_password:
+            self.render_login_form(error="Please enter username and password.")
+            
         elif hashutils.valid_pw(submitted_username, submitted_password, user.pw_hash):
             self.login_user(user)
             self.redirect('/blog/newpost')
         else:
             self.render_login_form(error="Invalid password")
+            
+        #else:
+        #    error = "username and password, please!"
+        #    self.render("login.html", username=username, password=password, error=error)
 
 class LogoutHandler(BlogHandler):
 
